@@ -20,8 +20,6 @@ driver = webdriver.Chrome(options=options)
 
 driver.get("http://www.facebook.com/")
 
-SCROLL_PAUSE_TIME = 2
-
 
 def get_fb_page(url):
     time.sleep(2)
@@ -32,16 +30,19 @@ def get_fb_page(url):
     last_height = driver.execute_script("return document.body.scrollHeight")
 
     while True:
-        # Scroll down to bottom
         driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+        time.sleep(2)
 
-        # Wait to load page
-        time.sleep(SCROLL_PAUSE_TIME)
-
-        # Calculate new scroll height and compare with last scroll height
         new_height = driver.execute_script("return document.body.scrollHeight")
         if new_height == last_height:
-            break
+            driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+            time.sleep(5)
+            driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+            time.sleep(5)
+
+            new_height = driver.execute_script("return document.body.scrollHeight")
+            if new_height == last_height:
+                break
         last_height = new_height
     html_source = driver.page_source
     return html_source
@@ -94,7 +95,7 @@ else:
     with open(UNIQ_FILENAME, "wb") as f:
         pickle.dump(uniq_urls, f)
 
-friend_graph = {}
+friend_graph = {"You": set()}
 GRAPH_FILENAME = "friend_graph.pickle"
 
 if os.path.isfile(GRAPH_FILENAME):
@@ -102,13 +103,13 @@ if os.path.isfile(GRAPH_FILENAME):
         friend_graph = pickle.load(f)
     print(f"Loaded existing graph, found {len(friend_graph.keys())} keys")
 
-
 for url in tqdm(uniq_urls):
     friend_username = find_friend_from_url(url)
     if friend_username not in friend_graph.keys():
         friend_graph[friend_username] = set()
 
     friend_graph[friend_username].add("You")
+    friend_graph["You"].add(friend_username)
     friend_page = get_fb_page(url.replace("friends_mutual", "friends"))
 
     parser = MyHTMLParser()
