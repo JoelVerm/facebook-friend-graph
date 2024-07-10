@@ -82,14 +82,14 @@ uniq_urls = set()
 if os.path.isfile(UNIQ_FILENAME):
     with open(UNIQ_FILENAME, "rb") as f:
         uniq_urls = pickle.load(f)
-    print("We loaded {} uniq friends".format(len(uniq_urls)))
+    print(f"We loaded {len(uniq_urls)} unique friends")
 else:
     friends_page = get_fb_page(my_url)
     parser = MyHTMLParser()
     parser.feed(friends_page)
     uniq_urls = set(parser.urls)
 
-    print("We found {} friends, saving it".format(len(uniq_urls)))
+    print(f"We found {len(uniq_urls)} friends, saving it")
 
     with open(UNIQ_FILENAME, "wb") as f:
         pickle.dump(uniq_urls, f)
@@ -100,7 +100,7 @@ GRAPH_FILENAME = "friend_graph.pickle"
 if os.path.isfile(GRAPH_FILENAME):
     with open(GRAPH_FILENAME, "rb") as f:
         friend_graph = pickle.load(f)
-    print("Loaded existing graph, found {} keys".format(len(friend_graph.keys())))
+    print(f"Loaded existing graph, found {len(friend_graph.keys())} keys")
 
 
 for url in tqdm(uniq_urls):
@@ -122,7 +122,9 @@ for url in tqdm(uniq_urls):
         friend_graph[friend_username].add(next_friend)
         friend_graph[next_friend].add(friend_username)
 
-    with open(GRAPH_FILENAME, "wb") as f:
-        pickle.dump(friend_graph, f)
+print(f"We found {len(friend_graph.keys())} friends, saving it")
+
+with open(GRAPH_FILENAME, "wb") as f:
+    pickle.dump(friend_graph, f)
 
 driver.quit()
