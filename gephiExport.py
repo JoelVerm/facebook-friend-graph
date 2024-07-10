@@ -6,8 +6,6 @@ GRAPH_FILENAME = "friend_graph.pickle"
 with open(GRAPH_FILENAME, "rb") as f:
     friend_graph = pickle.load(f)
 
-print(friend_graph)
-
 # First, we'll clean the edges of the grap
 edges = set()
 nodes = set()
