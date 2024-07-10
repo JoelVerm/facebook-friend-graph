@@ -3,28 +3,22 @@ import re
 import time
 from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.common.by import By
 import os
 from tqdm import tqdm
 import pickle
 import getpass
 
-username = input("Facebook username:")
-password = getpass.getpass('Password:')
+options = webdriver.ChromeOptions()
+prefs = {"profile.default_content_setting_values.notifications": 2}
+options.add_experimental_option("prefs", prefs)
+options.add_argument(
+    r"--user-data-dir=C:\Users\joelv\AppData\Local\Google\Chrome\User Data"
+)
+options.add_argument("--profile-directory=Default")
+driver = webdriver.Chrome(options=options)
 
-chrome_options = webdriver.ChromeOptions()
-prefs = {"profile.default_content_setting_values.notifications" : 2}
-chrome_options.add_experimental_option("prefs",prefs)
-driver = webdriver.Chrome(chrome_options=chrome_options)
-
-driver.get('http://www.facebook.com/')
-
-# authenticate to facebook account
-elem = driver.find_element_by_id("email")
-elem.send_keys(username)
-elem = driver.find_element_by_id("pass")
-elem.send_keys(password)
-elem.send_keys(Keys.RETURN)
-time.sleep(5)
+driver.get("http://www.facebook.com/")
 
 SCROLL_PAUSE_TIME = 2
 
@@ -32,6 +26,7 @@ SCROLL_PAUSE_TIME = 2
 def get_fb_page(url):
     time.sleep(2)
     driver.get(url)
+    time.sleep(2)
 
     # Get scroll height
     last_height = driver.execute_script("return document.body.scrollHeight")
@@ -52,14 +47,15 @@ def get_fb_page(url):
     return html_source
 
 
-def find_friend_from_url(url):
-    if re.search('com\/profile.php\?id=\d+\&', url) is not None:
-        m = re.search('com\/profile.php\?id=(\d+)\&', url)
-        friend = m.group(1)
+def find_friend_from_url(url: str):
+    url = url.replace("https://www.facebook.com/", "")
+    if url.startswith("profile.php"):
+        url = url.replace("profile.php?id=", "")
+        url = url.replace("&sk=friends_mutual", "")
+        return url
     else:
-        m = re.search('com\/(.*)\?', url)
-        friend = m.group(1)
-    return friend
+        url = url.replace("/friends_mutual", "")
+        return url
 
 
 class MyHTMLParser(HTMLParser):
@@ -75,59 +71,58 @@ class MyHTMLParser(HTMLParser):
             for name, value in attrs:
                 # If href is defined, print it.
                 if name == "href":
-                    if re.search('\?href|&href|hc_loca|\?fref', value) is not None:
-                        if re.search('.com/pages', value) is None:
-                            self.urls.append(value)
+                    if "friends_mutual" in value:
+                        self.urls.append(value)
 
 
-my_url = 'http://www.facebook.com/' + username + '/friends'
+my_url = "https://www.facebook.com/profile.php?sk=friends"
 
-UNIQ_FILENAME = 'uniq_urls.pickle'
+UNIQ_FILENAME = "uniq_urls.pickle"
+uniq_urls = set()
 if os.path.isfile(UNIQ_FILENAME):
-    with open(UNIQ_FILENAME, 'rb') as f:
+    with open(UNIQ_FILENAME, "rb") as f:
         uniq_urls = pickle.load(f)
-    print('We loaded {} uniq friends'.format(len(uniq_urls)))
+    print("We loaded {} uniq friends".format(len(uniq_urls)))
 else:
     friends_page = get_fb_page(my_url)
     parser = MyHTMLParser()
     parser.feed(friends_page)
     uniq_urls = set(parser.urls)
 
-    print('We found {} friends, saving it'.format(len(uniq_urls)))
+    print("We found {} friends, saving it".format(len(uniq_urls)))
 
-    with open(UNIQ_FILENAME, 'wb') as f:
+    with open(UNIQ_FILENAME, "wb") as f:
         pickle.dump(uniq_urls, f)
 
 friend_graph = {}
-GRAPH_FILENAME = 'friend_graph.pickle'
+GRAPH_FILENAME = "friend_graph.pickle"
 
 if os.path.isfile(GRAPH_FILENAME):
-    with open(GRAPH_FILENAME, 'rb') as f:
+    with open(GRAPH_FILENAME, "rb") as f:
         friend_graph = pickle.load(f)
-    print('Loaded existing graph, found {} keys'.format(len(friend_graph.keys())))
-
+    print("Loaded existing graph, found {} keys".format(len(friend_graph.keys())))
 
 
 for url in tqdm(uniq_urls):
     friend_username = find_friend_from_url(url)
-    if friend_username in friend_graph.keys():
-        continue
+    if friend_username not in friend_graph.keys():
+        friend_graph[friend_username] = set()
 
-    friend_graph[friend_username] = [username]
-    mutual_url = 'https://www.facebook.com/{}/friends_mutual'.format(friend_username)
-    mutual_page = get_fb_page(mutual_url)
+    friend_graph[friend_username].add("You")
+    friend_page = get_fb_page(url.replace("friends_mutual", "friends"))
 
     parser = MyHTMLParser()
-    parser.urls = []
-    parser.feed(mutual_page)
-    mutual_friends_urls = set(parser.urls)
-    print('Found {} urls'.format(len(mutual_friends_urls)))
+    parser.feed(friend_page)
+    next_friends_urls = set(parser.urls)
 
-    for mutual_url in mutual_friends_urls:
-        mutual_friend = find_friend_from_url(mutual_url)
-        friend_graph[friend_username].append(mutual_friend)
+    for next_friend_url in next_friends_urls:
+        next_friend = find_friend_from_url(next_friend_url)
+        if next_friend not in friend_graph.keys():
+            friend_graph[next_friend] = set()
+        friend_graph[friend_username].add(next_friend)
+        friend_graph[next_friend].add(friend_username)
 
-    with open(GRAPH_FILENAME, 'wb') as f:
+    with open(GRAPH_FILENAME, "wb") as f:
         pickle.dump(friend_graph, f)
 
 driver.quit()
